@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Multi-Signature Wallet</title>
+  <script src="https://cdn.jsdelivr.net/npm/web3@1.5.2/dist/web3.min.js"></script>
+</head>
+<body>
+
+<h1>Multi-Signature Wallet</h1>
+
+<button onclick="getOwners()">Get Owners</button>
+<p id="owners"></p>
+
+<button onclick="submitTransaction()">Submit Transaction</button>
+<p>
+  To: <input type="text" id="to" placeholder="Enter address">
+  Value: <input type="number" id="value" placeholder="Enter value">
+  Data: <input type="text" id="data" placeholder="Enter data">
+  <button onclick="approveTransaction()">Approve Transaction</button>
+  <button onclick="cancelTransaction()">Cancel Transaction</button>
+</p>
+<p id="transactions"></p>
+
+<script>
+  // Replace with your contract address and ABI
+  const contractAddress = '0x1AB988fB3F546E7cda20E8c209400aad73EC2dB9';
+  const contractABI = [[
+	{
+		"inputs": [
+			{
+				"internalType": "address[]",
+				"name": "_owners",
+				"type": "address[]"
+			},
+			{
+				"internalType": "uint256",
+				"name": "_threshold",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "nonpayable",
+		"type": "constructor"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "address",
+				"name": "newOwner",
+				"type": "address"
+			}
+		],
+		"name": "OwnershipAdded",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "address",
+				"name": "removedOwner",
+				"type": "address"
+			}
+		],
+		"name": "OwnershipRemoved",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "transactionId",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "address",
+				"name": "approver",
+				"type": "address"
+			}
+		],
+		"name": "TransactionApproved",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "transactionId",
+				"type": "uint256"
+			}
+		],
+		"name": "TransactionCancelled",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "transactionId",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "address",
+				"name": "executor",
+				"type": "address"
+			}
+		],
+		"name": "TransactionExecuted",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "transactionId",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "address",
+				"name": "to",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "value",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "bytes",
+				"name": "data",
+				"type": "bytes"
+			}
+		],
+		"name": "TransactionSubmitted",
+		"type": "event"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "newOwner",
+				"type": "address"
+			}
+		],
+		"name": "addOwner",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "transactionId",
+				"type": "uint256"
+			}
+		],
+		"name": "approveTransaction",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "transactionId",
+				"type": "uint256"
+			}
+		],
+		"name": "cancelTransaction",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"name": "isOwner",
+		"outputs": [
+			{
+				"internalType": "bool",
+				"name": "",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"name": "owners",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "ownerToRemove",
+				"type": "address"
+			}
+		],
+		"name": "removeOwner",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "to",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "value",
+				"type": "uint256"
+			},
+			{
+				"internalType": "bytes",
+				"name": "data",
+				"type": "bytes"
+			}
+		],
+		"name": "submitTransaction",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "threshold",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"name": "transactions",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "to",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "value",
+				"type": "uint256"
+			},
+			{
+				"internalType": "bytes",
+				"name": "data",
+				"type": "bytes"
+			},
+			{
+				"internalType": "bool",
+				"name": "executed",
+				"type": "bool"
+			},
+			{
+				"internalType": "uint256",
+				"name": "approvalCount",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	}
+]]; // Replace with your contract's ABI
+
+  // Replace with your Ethereum address
+  const userAddress = 'YOUR_USER_ADDRESS';
+
+  let web3;
+  let contractInstance;
+
+  async function initWeb3() {
+    if (window.ethereum) {
+      web3 = new Web3(window.ethereum);
+      try {
+        await window.ethereum.enable();
+      } catch (error) {
+        console.error("User denied account access");
+      }
+    } else if (window.web3) {
+      web3 = new Web3(window.web3.currentProvider);
+    } else {
+      console.error("No web3 provider detected. Please install MetaMask.");
+    }
+  }
+
+  async function initContract() {
+    contractInstance = new web3.eth.Contract(contractABI, contractAddress);
+  }
+
+  async function getOwners() {
+    const owners = await contractInstance.methods.owners().call();
+    document.getElementById("owners").innerText = `Owners: ${owners.join(", ")}`;
+  }
+
+  async function submitTransaction() {
+    const to = document.getElementById("to").value;
+    const value = document.getElementById("value").value;
+    const data = document.getElementById("data").value;
+
+    await contractInstance.methods.submitTransaction(to, value, data).send({ from: userAddress });
+
+    updateTransactions();
+  }
+
+  async function approveTransaction() {
+    const transactionId = prompt("Enter the Transaction ID to approve:");
+    await contractInstance.methods.approveTransaction(transactionId).send({ from: userAddress });
+
+    updateTransactions();
+  }
+
+  async function cancelTransaction() {
+    const transactionId = prompt("Enter the Transaction ID to cancel:");
+    await contractInstance.methods.cancelTransaction(transactionId).send({ from: userAddress });
+
+    updateTransactions();
+  }
+
+  async function updateTransactions() {
+    const transactions = await contractInstance.methods.transactions().call();
+    document.getElementById("transactions").innerText = `Transactions: ${transactions.length}`;
+  }
+
+  window.onload = async function () {
+    await initWeb3();
+    await initContract();
+  };
+</script>
+
+</body>
+</html>
